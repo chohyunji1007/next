@@ -23,16 +23,23 @@ export async function createInvoice(formData: FormData){
     const amountInCents = amount * 100; //js에서 부동 소수점 오류를 제거하고 정확성을 높이기 위해 db에 돈은 센트 단위로 저장하는 것이 좋음
     const date = new Date().toISOString().split('T')[0];
     // const rawFormData = Object.fromEntries(formData.entries()) //data가 많은 경우 entries() 사용
-
-    await sql`
+    try{
+        await sql`
         INSERT INTO invoices (customer_id, amount, status, date)
         VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
     `;
-
     //db가 업데이트 되면 /dashboard/invoices 경로의 유효성 검사를 하고 다시 서버에서 새로운 데이터를 가져옴
     revalidatePath('/dashboard/invoices');
     //새로 데이터를 가져온 뒤 리다이렉션
     redirect('/dashboard/invoices');
+    }catch(error){
+        return{
+            message : 'Database Error : Failed to Create Invoice.',
+        };
+    }
+    
+
+    
 }
 
 // Use Zod to update the expected types
@@ -48,18 +55,31 @@ export async function updateInvoice(id: string, formData: FormData) {
   });
  
   const amountInCents = amount * 100;
- 
-  await sql`
+  try{
+    await sql`
     UPDATE invoices
     SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
     WHERE id = ${id}
   `;
- 
   revalidatePath('/dashboard/invoices');
   redirect('/dashboard/invoices');
+  }catch(error){
+    return { message : 'Database Error: Failed to Update Invoice. '};
+  }
+  
+ 
+  
 }
 
 export async function deleteInvoice(id: string) {
+//   throw new Error('Failed to Delete Invoice');
+ 
+  // Unreachable code block
+  try {
     await sql`DELETE FROM invoices WHERE id = ${id}`;
     revalidatePath('/dashboard/invoices');
+    return { message: 'Deleted Invoice' };
+  } catch (error) {
+    return { message: 'Database Error: Failed to Delete Invoice' };
   }
+}
