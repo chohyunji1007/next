@@ -4,12 +4,22 @@ import { ArrowLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { generatePagination } from '@/app/lib/utils';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 export default function Pagination({ totalPages }: { totalPages: number }) {
   // NOTE: comment in this code when you get to this point in the course
 
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentPage = Number(searchParams.get('page')) || 1;
+
   // const allPages = generatePagination(currentPage, totalPages);
 
+  const createPageURL = (pageNumber: number | string) =>{
+    const params = new URLSearchParams(searchParams); //현재 검색 매개변수의 인스턴스 생성
+    params.set('page', pageNumber.toString()); // 페이지('page') 매개변수를 제공된 페이지 번호(pageNumber)로 업데이트
+    return `${pathname}?${params.toString()}`; // 현재 경로이름(pathname)과 업데이트된 검색 매개변수(params)를 사용하여 전체 url 구성
+  }
   return (
     <>
       {/* NOTE: comment in this code when you get to this point in the course */}
