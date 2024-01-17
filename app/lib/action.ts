@@ -6,20 +6,42 @@ import { revalidatePath } from 'next/cache'; // 데이터를 업데이트 하므
 import { redirect } from 'next/navigation'; //페이지 리다이렉션
 const FormSchema = z.object({ // 양식 개체의 모양과 일치하는 스키마 정의
     id: z.string(),
-    customerId: z.string(),
-    amount: z.coerce.number(),
-    status: z.enum(['pending', 'paid']),
+    customerId: z.string({
+        invalid_type_error: 'Please select a customer.',
+    }),
+    amount: z.coerce.number({
+        invalid_type_error: 'Please select an amount greater than $0.',
+    }),
+    status: z.enum(['pending', 'paid'],{
+        invalid_type_error: 'Please select an invoice status. ',
+    }),
     date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({id:true, date:true}); // .omit({ 유효성 검사에서 제외할 필드 : 생성할 form에서 없는 값 })
 
-export async function createInvoice(formData: FormData){
-    const {customerId, amount, status } = CreateInvoice.parse({ //데이터 유효성 검사를 하고 내려옴
+export type State = {
+    errors?:{
+        customerId?: string[];
+        amount?: string[];
+        status?: string[];
+    };
+    message?: string | null;
+}
+export async function createInvoice(prevState:State, formData: FormData){
+    // const {customerId, amount, status } = CreateInvoice.parse({ //데이터 유효성 검사를 하고 내려옴
+    const validatedFields = CreateInvoice.safeParse({ //safeParse()는 객체를 반환
         customerId : formData.get('customerId'),
         amount: formData.get('amount'),
         status: formData.get('status'),
     });
+    if(!validatedFields.success){
+        return{
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Missing Fields. Failed to Create Invoice. ',
+        };
+    }
+    const {customerId, amount, status } = validatedFields.data;
     const amountInCents = amount * 100; //js에서 부동 소수점 오류를 제거하고 정확성을 높이기 위해 db에 돈은 센트 단위로 저장하는 것이 좋음
     const date = new Date().toISOString().split('T')[0];
     // const rawFormData = Object.fromEntries(formData.entries()) //data가 많은 경우 entries() 사용
@@ -47,29 +69,40 @@ const UpdateInvoice = FormSchema.omit({ id: true, date: true });
  
 // ...
  
-export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
-    customerId: formData.get('customerId'),
-    amount: formData.get('amount'),
-    status: formData.get('status'),
-  });
- 
-  const amountInCents = amount * 100;
-  try{
-    await sql`
-    UPDATE invoices
-    SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
-    WHERE id = ${id}
-  `;
-  revalidatePath('/dashboard/invoices');
-  redirect('/dashboard/invoices');
-  }catch(error){
-    return { message : 'Database Error: Failed to Update Invoice. '};
+export async function updateInvoice(
+    id: string,
+    prevState: State,
+    formData: FormData,
+  ) {
+    const validatedFields = UpdateInvoice.safeParse({
+      customerId: formData.get('customerId'),
+      amount: formData.get('amount'),
+      status: formData.get('status'),
+    });
+   
+    if (!validatedFields.success) {
+      return {
+        errors: validatedFields.error.flatten().fieldErrors,
+        message: 'Missing Fields. Failed to Update Invoice.',
+      };
+    }
+   
+    const { customerId, amount, status } = validatedFields.data;
+    const amountInCents = amount * 100;
+   
+    try {
+      await sql`
+        UPDATE invoices
+        SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+        WHERE id = ${id}
+      `;
+    } catch (error) {
+      return { message: 'Database Error: Failed to Update Invoice.' };
+    }
+   
+    revalidatePath('/dashboard/invoices');
+    redirect('/dashboard/invoices');
   }
-  
- 
-  
-}
 
 export async function deleteInvoice(id: string) {
 //   throw new Error('Failed to Delete Invoice');
